@@ -1,0 +1,10 @@
+<!--
+  WoW reads Bindings.xml automatically (it is NOT listed in the .toc).
+  This adds "Toggle Duo Ledger" to Options > Keybindings > AddOns, where you
+  can bind it to a keyboard key or a controller button.
+-->
+<Bindings>
+  <Binding name="DUOLEDGER_TOGGLE" header="DUOLEDGER" category="ADDONS">
+    DuoLedger_Toggle()
+  </Binding>
+</Bindings>

@@ -1,0 +1,6 @@
+# Your own game data. It belongs in WTF\, never in the addon repo.
+DuoLedger.lua.bak
+*.bak
+WTF/
+.DS_Store
+Thumbs.db
