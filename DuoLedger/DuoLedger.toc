@@ -1,4 +1,4 @@
-## Interface: 120105
+## Interface: 16001
 ## Title: Duo Ledger
 ## Notes: Tracks your leveling sessions and exports them to the Forever Duo Ledger.
 ## Author: Shane

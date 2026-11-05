@@ -77,7 +77,7 @@ Lua ideas you'll meet that the guide didn't cover:
 
 These are the parts I couldn't test outside the game. I ran the code against a fake WoW to check the tracking and the export format, but not in the real client.
 
-1. **Interface number.** Run `/dump select(4, GetBuildInfo())` and put the number in the `## Interface:` line of `DuoLedger.toc`.
+1. **Interface number.** Confirmed in game on 5 Nov 2026: Forever is `16001`, already set in `DuoLedger.toc`.
 2. **Errors.** Run `/console scriptErrors 1` once so any Lua error pops up instead of failing silently.
 3. **Gamepad buttons inside the window.** A, B and the D-pad use retail's frame gamepad support. If they do nothing, or stop your character moving while the window is open, tell me what happened.
 4. **Loot counting.** Loot a stack and check the Summary's Items number goes up.
