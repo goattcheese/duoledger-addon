@@ -36,10 +36,29 @@ local function minutesSince(t)
   return math.floor((time() - (t or time())) / 60)
 end
 
+-- "Grouped 1 h 20 min   Kills 45   Upgrades 2   Firsts 3"
+local function journey(s)
+  local mins = math.floor((s.grouped or 0) / 60)
+  local grouped = mins >= 60
+    and string.format("%d h %d min", math.floor(mins / 60), mins % 60)
+    or (mins .. " min")
+  return string.format("Grouped %s   Kills %d   Upgrades %d   Firsts %d",
+    grouped, s.kills or 0, #(s.gear or {}), #(s.firsts or {}))
+end
+
 local function buildSummary()
   local c = ns.Tracker.CurrentCharacter()
   local s = ns.Tracker.CurrentSession()
   if not c or not s then return "Waiting for login..." end
+
+  -- "Last death: Hogger in Elwynn Forest", or a blank line if none.
+  local function lastDeath(sess)
+    local log = sess.deathLog
+    local d = log and log[#log]
+    if not d then return "" end
+    return "|cff999999Last death: " .. (d.killer or "unknown")
+      .. " in " .. (d.zone or "?") .. "|r"
+  end
 
   local pct = (c.xpMax and c.xpMax > 0) and math.floor(c.xp / c.xpMax * 100) or 0
   local lines = {
@@ -57,7 +76,11 @@ local function buildSummary()
     -- # gives the length of a list.
     string.format("Quests %d   Items %d   Dungeons %d",
       #s.quests, #s.items, #s.dungeons),
-    string.format("Deaths %d   Items mailed %d", s.deaths, #s.mail),
+    string.format("Deaths %d   Items mailed %d   Money earned %s", s.deaths,
+      #s.mail, GetCoinTextureString and GetCoinTextureString(s.moneyGained or 0)
+        or tostring(s.moneyGained or 0)),
+    lastDeath(s),
+    journey(s),
     "",
     string.format("|cff999999Finished sessions stored: %d|r",
       #ns.db.sessions),
@@ -171,7 +194,7 @@ end
 local function build()
   panel = CreateFrame("Frame", "DuoLedgerPanel", UIParent,
     "BasicFrameTemplateWithInset")
-  panel:SetSize(480, 340)
+  panel:SetSize(480, 360)
   panel:SetPoint("CENTER")
   panel:SetFrameStrata("DIALOG")
   panel:Hide()

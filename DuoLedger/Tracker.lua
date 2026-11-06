@@ -21,6 +21,12 @@ local forgotten = {}  -- names forgetRetired dropped, to print at login
 -- Plain locals: they don't need saving, we re-read them after a reload.
 local lastLevel, lastXP, lastXPMax
 
+-- Money works the same way: remember the last amount and add up the rises.
+-- Rises while a vendor, mailbox, trade or auction window is open are left
+-- out, so selling gear or collecting mail doesn't count as "earned".
+local lastMoney
+local shopping = 0   -- how many of those windows are open right now
+
 ---------------------------------------------------------------------------
 -- Small helpers
 ---------------------------------------------------------------------------
@@ -53,10 +59,20 @@ local function newSession()
     levelTo   = UnitLevel("player"),
     xpGained  = 0,
     deaths    = 0,
+    deathLog  = {},   -- list of {at = time, zone = "Zone", killer = "Mob"}
+    moneyGained = 0,  -- copper earned from loot and quests (100 copper = 1 silver)
     quests    = {},   -- list of {id = 123, name = "Quest title"}
     items     = {},   -- list of {id = 456, name = "Item name"}
     dungeons  = {},   -- list of dungeon names
     mail      = {},   -- list of {to = "Name", item = "Item name", qty = 5}
+    -- Filled in by Journey.lua:
+    dings       = {}, -- list of {at, level, zone, played, levelTime}
+    grouped     = 0,  -- seconds spent in a group
+    groupedWith = {}, -- seconds with each group member, by name
+    xpFrom      = { quest = 0, kill = 0, explore = 0 },
+    kills       = 0,  -- kills that gave XP
+    gear        = {}, -- list of gear upgrades
+    firsts      = {}, -- list of {at, kind, name, level}: new zones, flight paths...
   }
 end
 
@@ -85,6 +101,9 @@ function Tracker.Snapshot()
   setIf(me, "resting", IsResting() and true or false)
   setIf(me, "zone",    GetRealZoneText() or GetZoneText())
   setIf(me, "hearth",  GetBindLocation())
+
+  -- Add up time spent grouped so far (see Journey.lua).
+  if ns.Journey then ns.Journey.Flush() end
 
   local s = current()
   if s then
@@ -123,12 +142,15 @@ end
 -- Blizzard keeps the loot message in a global like
 -- LOOT_ITEM_SELF = "You receive loot: %s." (translated per language).
 -- We turn that format into a Lua pattern so it works in any language.
-local function toPattern(fmt)
+-- With open = true the pattern doesn't have to reach the end of the line,
+-- for messages that can carry extra text, like "(+120 exp Rested bonus)".
+local function toPattern(fmt, open)
   fmt = fmt:gsub("%%%d?%$?s", "\001"):gsub("%%%d?%$?d", "\002")
   fmt = fmt:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")   -- escape magic chars
-  fmt = fmt:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
-  return "^" .. fmt .. "$"
+  fmt = fmt:gsub("\001", "(.-)"):gsub("\002", "(%%d+)")
+  return "^" .. fmt .. (open and "" or "$")
 end
+Tracker.Pattern = toPattern   -- Journey.lua uses it too
 
 local LOOT_MULTI  = LOOT_ITEM_SELF_MULTIPLE and toPattern(LOOT_ITEM_SELF_MULTIPLE)
 local LOOT_SINGLE = LOOT_ITEM_SELF and toPattern(LOOT_ITEM_SELF)
@@ -226,7 +248,9 @@ local function onLogin(isReload)
 
   lastLevel = nil
   updateXP()             -- remember starting XP
+  lastMoney = GetMoney()
   checkDungeon(isReload)
+  if ns.Journey then ns.Journey.OnLogin(isReload) end
   Tracker.Snapshot()
 end
 
@@ -310,10 +334,67 @@ handlers.PLAYER_LEVEL_UP = function()
   C_Timer.After(1, function() updateXP(); Tracker.Snapshot() end)
 end
 
+-- What killed us, from the game's Death Recap (the window behind the
+-- "Recap" button on the release popup). It keeps the last few hits; the
+-- last one is the killing blow. Called a moment after death, when we're
+-- out of combat, so the values shouldn't be secret. If anything is
+-- missing or secret we just return nil: the death still counts.
+local function killerFromRecap()
+  if not (C_DeathRecap and C_DeathRecap.GetRecapEvents) then return nil end
+  -- pcall ("protected call") runs a function and catches any error,
+  -- so an API that behaves differently in Forever can't break us.
+  local ok, events = pcall(C_DeathRecap.GetRecapEvents)
+  if not ok or type(events) ~= "table" or #events == 0 then return nil end
+  local hit = events[1]   -- newest first in Blizzard's own recap
+  if type(events[#events]) == "table" and type(hit) == "table"
+    and (readable(events[#events].timestamp) or 0) > (readable(hit.timestamp) or 0) then
+    hit = events[#events]
+  end
+  if type(hit) ~= "table" then return nil end
+  local who   = readable(hit.sourceName)
+  local spell = readable(hit.spellName)
+  local env   = readable(hit.environmentalType)
+  if env then return env end                -- "Falling", "Drowning", "Lava"
+  if who and spell then return who .. " (" .. spell .. ")" end
+  return who or spell
+end
+
 handlers.PLAYER_DEAD = function()
   local s = current()
-  if s then s.deaths = s.deaths + 1 end
+  if s then
+    s.deaths = s.deaths + 1
+    s.deathLog = s.deathLog or {}          -- sessions saved before v0.2
+    local entry = {
+      at    = time(),
+      zone  = readable(GetRealZoneText()) or readable(GetZoneText()),
+      level = UnitLevel("player"),
+    }
+    table.insert(s.deathLog, entry)
+    -- The recap is filled in just after this event, so look a second later.
+    C_Timer.After(1, function() entry.killer = killerFromRecap() end)
+  end
   Tracker.Snapshot()
+end
+
+handlers.PLAYER_MONEY = function()
+  local now = readable(GetMoney())
+  if not now then return end
+  local s = current()
+  if s and lastMoney and now > lastMoney and shopping == 0 then
+    s.moneyGained = (s.moneyGained or 0) + (now - lastMoney)
+  end
+  lastMoney = now
+end
+
+-- Each window that opens adds 1 to "shopping", and closing takes 1 away.
+-- math.max keeps it from going below 0 if a close event fires twice.
+for _, pair in ipairs({
+  { "MERCHANT_SHOW", "MERCHANT_CLOSED" }, { "MAIL_SHOW", "MAIL_CLOSED" },
+  { "TRADE_SHOW", "TRADE_CLOSED" },
+  { "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED" },
+}) do
+  handlers[pair[1]] = function() shopping = shopping + 1 end
+  handlers[pair[2]] = function() shopping = math.max(0, shopping - 1) end
 end
 
 -- QUEST_COMPLETE fires when the quest's reward window opens. We note the
@@ -413,6 +494,7 @@ end
 local function isEmpty(s)
   return s.xpGained == 0 and s.deaths == 0 and #s.quests == 0
     and #s.items == 0 and #s.dungeons == 0 and #s.mail == 0
+    and #(s.gear or {}) == 0 and #(s.firsts or {}) == 0
     and s.levelFrom == s.levelTo and (s["end"] - s.start) < 60
 end
 
