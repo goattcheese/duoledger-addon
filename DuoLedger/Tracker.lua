@@ -15,6 +15,7 @@ ns.Tracker = Tracker
 local db        -- shortcut to DuoLedgerDB once it's loaded
 local charKey   -- "Name-Realm", our key for the current character
 local me        -- this character's record inside db.characters
+local forgotten = {}  -- names forgetRetired dropped, to print at login
 
 -- XP we saw last time, so we can work out how much was gained.
 -- Plain locals: they don't need saving, we re-read them after a reload.
@@ -201,6 +202,18 @@ local function onLogin(isReload)
   db.characters[charKey] = db.characters[charKey] or {}
   me = db.characters[charKey]
   me.name = name
+  -- UnitGUID gives this character's id, like "Player-1234-0A1B2C3D". It
+  -- never changes for this character, and a new character always gets a
+  -- new one, even with an old name. The Ledger uses it to tell them apart.
+  me.guid = UnitGUID("player")
+  me.realm = realm
+
+  -- Say which characters we forgot (see forgetRetired below). We wait
+  -- until now because the chat window isn't ready when the addon loads.
+  for _, gone in ipairs(forgotten) do
+    print("|cffffd100Duo Ledger:|r forgot " .. gone .. ", archived in the Ledger.")
+  end
+  forgotten = {}
 
   -- PLAYER_LOGOUT fires for both /reload and a real logout, and we can't
   -- tell them apart at that moment. So each session stays "open" on its
@@ -224,6 +237,44 @@ end
 local frame = CreateFrame("Frame")
 local handlers = {}   -- event name -> function
 
+-- Characters you archived or deleted in the Ledger arrive in LedgerData.lua
+-- as a "retired" list of {name, guid}. Drop them and their saved sessions,
+-- so they stop showing up in every export.
+-- A retired entry with a guid matches only that exact character. One without
+-- (archived before characters had ids) matches by name, but only a character
+-- that has no guid yet: a new character gets its guid at its first login, so
+-- a remake that reuses the old name is never forgotten by mistake.
+local function forgetRetired()
+  local data = DuoLedgerLedgerData
+  if type(data) ~= "table" or type(data.retired) ~= "table" then return end
+  for _, r in ipairs(data.retired) do
+    if type(r) ~= "table" then r = {} end
+    local rGuid = (r.guid ~= "" and r.guid) or nil
+    local rName = type(r.name) == "string" and r.name:lower() or nil
+    -- We can't remove entries from a table while pairs() walks over it, so
+    -- collect the keys first, then remove them.
+    local drop = {}
+    for key, c in pairs(db.characters) do
+      local hit
+      if rGuid then
+        hit = (c.guid == rGuid)
+      else
+        hit = (c.guid == nil and rName ~= nil and c.name ~= nil and c.name:lower() == rName)
+      end
+      if hit then table.insert(drop, key) end
+    end
+    for _, key in ipairs(drop) do
+      local name = db.characters[key].name or key
+      db.characters[key] = nil          -- setting a key to nil deletes it
+      -- Walk backwards, so removing an entry doesn't skip the next one.
+      for i = #db.sessions, 1, -1 do
+        if db.sessions[i].character == name then table.remove(db.sessions, i) end
+      end
+      table.insert(forgotten, name)
+    end
+  end
+end
+
 handlers.ADDON_LOADED = function(addonName)
   if addonName ~= "DuoLedger" then return end    -- fires for every addon
   -- First run: the SavedVariable is nil, so create the empty layout.
@@ -232,6 +283,7 @@ handlers.ADDON_LOADED = function(addonName)
   db.characters = db.characters or {}
   db.sessions   = db.sessions or {}
   ns.db = db
+  forgetRetired()
   frame:UnregisterEvent("ADDON_LOADED")
 end
 

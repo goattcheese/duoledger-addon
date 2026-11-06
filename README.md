@@ -31,6 +31,8 @@ The game and the Ledger each write their own file, so they never overwrite each 
 
 **Ledger to game.** Press **Send to game** and save `LedgerData.lua` into the addon folder, replacing the old one. Then `/reload`. The **Ledger** view shows your partner, the mail queued for you to send, and what's left on your wishlist, and item tooltips show "Ledger wishlist: name" for anything someone still needs. You can do this mid-session, from a second screen, or after your cousin changes something, because nothing in the game touches that file.
 
+**Deleted or remade characters.** The addon remembers every character you log in on, and saves each one's game id (`UnitGUID`), which never changes and is new for every new character, even one that reuses an old name. When you archive or delete a character in the Ledger, the next **Send to game** lists it in `LedgerData.lua`, and at that `/reload` the addon forgets it and its saved sessions, then says so in chat. A character archived before it had an id is matched by name, but only if it has no id yet, so a remake with the same name is never forgotten by mistake.
+
 **Why it isn't one click.** The Ledger runs inside claude.ai, and browsers don't let a page embedded that way open folders on your PC. I tested this. So each sync picks the file, and each send saves one. If your browser saves straight to Downloads, turn on "Ask where to save each file" so you can save into the addon folder.
 
 ## What gets recorded

@@ -31,7 +31,7 @@ local KEY_ORDER = {
   "id",   -- quests and items read best as {"id":..., "name":...}
   "app", "v", "characters", "sessions",
   -- characters
-  "name", "class", "race", "level", "xp", "zone", "hearth",
+  "name", "guid", "realm", "class", "race", "level", "xp", "zone", "hearth",
   "restXP", "xpMax", "resting", "logout", "professions", "inventory",
   -- sessions
   "character", "start", "end", "levelFrom", "levelTo", "xpGained",
@@ -49,6 +49,8 @@ end
 local function exportCharacter(c, isOnline)
   return {
     name    = c.name,
+    guid    = c.guid,      -- nil until this character logs in with v0.3
+    realm   = c.realm,
     class   = c.class,
     race    = c.race,
     level   = c.level,
