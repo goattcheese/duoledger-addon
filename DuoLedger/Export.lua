@@ -35,7 +35,9 @@ local KEY_ORDER = {
   "restXP", "xpMax", "resting", "logout", "professions", "inventory",
   -- sessions
   "character", "start", "end", "levelFrom", "levelTo", "xpGained",
-  "deaths", "quests", "items", "dungeons", "mail",
+  "deaths", "deathLog", "moneyGained", "quests", "items", "dungeons", "mail",
+  -- inside deathLog
+  "at", "killer",
   -- inside mail
   "to", "item", "qty",
 }
@@ -70,6 +72,15 @@ local function exportCharacter(c, isOnline)
   }
 end
 
+-- Each death as {at, zone, killer}, with the time as ISO text.
+local function deathLog(t)
+  local out = ns.Json.array()
+  for i, d in ipairs(t or {}) do
+    out[i] = { at = formatTime(d.at), zone = d.zone, killer = d.killer }
+  end
+  return out
+end
+
 local function exportSession(s)
   return {
     character = s.character,
@@ -79,6 +90,8 @@ local function exportSession(s)
     levelTo   = s.levelTo,
     xpGained  = s.xpGained,
     deaths    = s.deaths,
+    deathLog  = nonEmpty(deathLog(s.deathLog)),
+    moneyGained = s.moneyGained,
     quests    = list(s.quests),
     items     = list(s.items),
     dungeons  = list(s.dungeons),
