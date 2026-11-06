@@ -41,6 +41,15 @@ local function buildSummary()
   local s = ns.Tracker.CurrentSession()
   if not c or not s then return "Waiting for login..." end
 
+  -- "Last death: Hogger in Elwynn Forest", or a blank line if none.
+  local function lastDeath(sess)
+    local log = sess.deathLog
+    local d = log and log[#log]
+    if not d then return "" end
+    return "|cff999999Last death: " .. (d.killer or "unknown")
+      .. " in " .. (d.zone or "?") .. "|r"
+  end
+
   local pct = (c.xpMax and c.xpMax > 0) and math.floor(c.xp / c.xpMax * 100) or 0
   local lines = {
     -- |cffffd100 ... |r colours text gold, like Blizzard's headings.
@@ -58,6 +67,7 @@ local function buildSummary()
     string.format("Quests %d   Items %d   Dungeons %d",
       #s.quests, #s.items, #s.dungeons),
     string.format("Deaths %d   Items mailed %d", s.deaths, #s.mail),
+    lastDeath(s),
     "",
     string.format("|cff999999Finished sessions stored: %d|r",
       #ns.db.sessions),

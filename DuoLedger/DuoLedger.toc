@@ -2,7 +2,7 @@
 ## Title: Duo Ledger
 ## Notes: Tracks your leveling sessions and exports them to the Forever Duo Ledger.
 ## Author: Shane
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: DuoLedgerDB
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
 ## AddonCompartmentFunc: DuoLedger_Toggle

@@ -52,6 +52,7 @@ local function newSession()
     levelTo   = UnitLevel("player"),
     xpGained  = 0,
     deaths    = 0,
+    deathLog  = {},   -- list of {at = time, zone = "Zone", killer = "Mob"}
     quests    = {},   -- list of {id = 123, name = "Quest title"}
     items     = {},   -- list of {id = 456, name = "Item name"}
     dungeons  = {},   -- list of dungeon names
@@ -258,9 +259,45 @@ handlers.PLAYER_LEVEL_UP = function()
   C_Timer.After(1, function() updateXP(); Tracker.Snapshot() end)
 end
 
+-- What killed us, from the game's Death Recap (the window behind the
+-- "Recap" button on the release popup). It keeps the last few hits; the
+-- last one is the killing blow. Called a moment after death, when we're
+-- out of combat, so the values shouldn't be secret. If anything is
+-- missing or secret we just return nil: the death still counts.
+local function killerFromRecap()
+  if not (C_DeathRecap and C_DeathRecap.GetRecapEvents) then return nil end
+  -- pcall ("protected call") runs a function and catches any error,
+  -- so an API that behaves differently in Forever can't break us.
+  local ok, events = pcall(C_DeathRecap.GetRecapEvents)
+  if not ok or type(events) ~= "table" or #events == 0 then return nil end
+  local hit = events[1]   -- newest first in Blizzard's own recap
+  if type(events[#events]) == "table" and type(hit) == "table"
+    and (readable(events[#events].timestamp) or 0) > (readable(hit.timestamp) or 0) then
+    hit = events[#events]
+  end
+  if type(hit) ~= "table" then return nil end
+  local who   = readable(hit.sourceName)
+  local spell = readable(hit.spellName)
+  local env   = readable(hit.environmentalType)
+  if env then return env end                -- "Falling", "Drowning", "Lava"
+  if who and spell then return who .. " (" .. spell .. ")" end
+  return who or spell
+end
+
 handlers.PLAYER_DEAD = function()
   local s = current()
-  if s then s.deaths = s.deaths + 1 end
+  if s then
+    s.deaths = s.deaths + 1
+    s.deathLog = s.deathLog or {}          -- sessions saved before v0.2
+    local entry = {
+      at    = time(),
+      zone  = readable(GetRealZoneText()) or readable(GetZoneText()),
+      level = UnitLevel("player"),
+    }
+    table.insert(s.deathLog, entry)
+    -- The recap is filled in just after this event, so look a second later.
+    C_Timer.After(1, function() entry.killer = killerFromRecap() end)
+  end
   Tracker.Snapshot()
 end
 
