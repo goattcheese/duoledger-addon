@@ -65,6 +65,14 @@ local function newSession()
     items     = {},   -- list of {id = 456, name = "Item name"}
     dungeons  = {},   -- list of dungeon names
     mail      = {},   -- list of {to = "Name", item = "Item name", qty = 5}
+    -- Filled in by Journey.lua:
+    dings       = {}, -- list of {at, level, zone, played, levelTime}
+    grouped     = 0,  -- seconds spent in a group
+    groupedWith = {}, -- seconds with each group member, by name
+    xpFrom      = { quest = 0, kill = 0, explore = 0 },
+    kills       = 0,  -- kills that gave XP
+    gear        = {}, -- list of gear upgrades
+    firsts      = {}, -- list of {at, kind, name, level}: new zones, flight paths...
   }
 end
 
@@ -93,6 +101,9 @@ function Tracker.Snapshot()
   setIf(me, "resting", IsResting() and true or false)
   setIf(me, "zone",    GetRealZoneText() or GetZoneText())
   setIf(me, "hearth",  GetBindLocation())
+
+  -- Add up time spent grouped so far (see Journey.lua).
+  if ns.Journey then ns.Journey.Flush() end
 
   local s = current()
   if s then
@@ -131,12 +142,15 @@ end
 -- Blizzard keeps the loot message in a global like
 -- LOOT_ITEM_SELF = "You receive loot: %s." (translated per language).
 -- We turn that format into a Lua pattern so it works in any language.
-local function toPattern(fmt)
+-- With open = true the pattern doesn't have to reach the end of the line,
+-- for messages that can carry extra text, like "(+120 exp Rested bonus)".
+local function toPattern(fmt, open)
   fmt = fmt:gsub("%%%d?%$?s", "\001"):gsub("%%%d?%$?d", "\002")
   fmt = fmt:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")   -- escape magic chars
-  fmt = fmt:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
-  return "^" .. fmt .. "$"
+  fmt = fmt:gsub("\001", "(.-)"):gsub("\002", "(%%d+)")
+  return "^" .. fmt .. (open and "" or "$")
 end
+Tracker.Pattern = toPattern   -- Journey.lua uses it too
 
 local LOOT_MULTI  = LOOT_ITEM_SELF_MULTIPLE and toPattern(LOOT_ITEM_SELF_MULTIPLE)
 local LOOT_SINGLE = LOOT_ITEM_SELF and toPattern(LOOT_ITEM_SELF)
@@ -236,6 +250,7 @@ local function onLogin(isReload)
   updateXP()             -- remember starting XP
   lastMoney = GetMoney()
   checkDungeon(isReload)
+  if ns.Journey then ns.Journey.OnLogin(isReload) end
   Tracker.Snapshot()
 end
 
@@ -479,6 +494,7 @@ end
 local function isEmpty(s)
   return s.xpGained == 0 and s.deaths == 0 and #s.quests == 0
     and #s.items == 0 and #s.dungeons == 0 and #s.mail == 0
+    and #(s.gear or {}) == 0 and #(s.firsts or {}) == 0
     and s.levelFrom == s.levelTo and (s["end"] - s.start) < 60
 end
 

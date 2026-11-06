@@ -36,8 +36,12 @@ local KEY_ORDER = {
   -- sessions
   "character", "start", "end", "levelFrom", "levelTo", "xpGained",
   "deaths", "deathLog", "moneyGained", "quests", "items", "dungeons", "mail",
-  -- inside deathLog
-  "at", "killer",
+  "kills", "xpFrom", "grouped", "groupedWith", "dings", "gear", "firsts",
+  -- inside deathLog, dings, gear and firsts
+  "at", "kind", "killer", "slot", "played", "levelTime", "ilvl", "was",
+  "wasIlvl", "from", "where",
+  -- inside xpFrom
+  "quest", "kill", "explore", "other",
   -- inside mail
   "to", "item", "qty",
 }
@@ -81,6 +85,29 @@ local function deathLog(t)
   return out
 end
 
+-- Each entry's "at" time as ISO text, the rest copied as is.
+local function timedList(t, fields)
+  local out = ns.Json.array()
+  for i, e in ipairs(t or {}) do
+    local row = { at = formatTime(e.at) }
+    for _, f in ipairs(fields) do row[f] = e[f] end
+    out[i] = row
+  end
+  return out
+end
+
+-- XP by source. "other" is whatever the session gained that we couldn't
+-- put in a box: rested bonus we couldn't read, a quest at max level, etc.
+local function xpFrom(s)
+  local x = s.xpFrom
+  if not x then return nil end
+  local known = (x.quest or 0) + (x.kill or 0) + (x.explore or 0)
+  return {
+    quest = x.quest or 0, kill = x.kill or 0, explore = x.explore or 0,
+    other = math.max(0, (s.xpGained or 0) - known),
+  }
+end
+
 local function exportSession(s)
   return {
     character = s.character,
@@ -96,6 +123,16 @@ local function exportSession(s)
     items     = list(s.items),
     dungeons  = list(s.dungeons),
     mail      = list(s.mail),
+    -- From Journey.lua. Sessions recorded before v0.3 don't have these,
+    -- and nil fields are simply left out of the JSON.
+    kills       = s.kills,
+    xpFrom      = xpFrom(s),
+    grouped     = s.grouped,
+    groupedWith = nonEmpty(s.groupedWith),
+    dings  = s.dings and timedList(s.dings, { "level", "zone", "played", "levelTime" }),
+    gear   = s.gear and timedList(s.gear, { "slot", "id", "name", "ilvl", "was",
+               "wasIlvl", "from", "where", "level" }),
+    firsts = s.firsts and timedList(s.firsts, { "kind", "name", "level", "zone" }),
   }
 end
 
