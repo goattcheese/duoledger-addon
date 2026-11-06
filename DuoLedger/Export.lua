@@ -35,7 +35,7 @@ local KEY_ORDER = {
   "restXP", "xpMax", "resting", "logout", "professions", "inventory",
   -- sessions
   "character", "start", "end", "levelFrom", "levelTo", "xpGained",
-  "deaths", "deathLog", "quests", "items", "dungeons", "mail",
+  "deaths", "deathLog", "moneyGained", "quests", "items", "dungeons", "mail",
   -- inside deathLog
   "at", "killer",
   -- inside mail
@@ -89,6 +89,7 @@ local function exportSession(s)
     xpGained  = s.xpGained,
     deaths    = s.deaths,
     deathLog  = nonEmpty(deathLog(s.deathLog)),
+    moneyGained = s.moneyGained,
     quests    = list(s.quests),
     items     = list(s.items),
     dungeons  = list(s.dungeons),

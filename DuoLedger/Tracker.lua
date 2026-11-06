@@ -20,6 +20,12 @@ local me        -- this character's record inside db.characters
 -- Plain locals: they don't need saving, we re-read them after a reload.
 local lastLevel, lastXP, lastXPMax
 
+-- Money works the same way: remember the last amount and add up the rises.
+-- Rises while a vendor, mailbox, trade or auction window is open are left
+-- out, so selling gear or collecting mail doesn't count as "earned".
+local lastMoney
+local shopping = 0   -- how many of those windows are open right now
+
 ---------------------------------------------------------------------------
 -- Small helpers
 ---------------------------------------------------------------------------
@@ -53,6 +59,7 @@ local function newSession()
     xpGained  = 0,
     deaths    = 0,
     deathLog  = {},   -- list of {at = time, zone = "Zone", killer = "Mob"}
+    moneyGained = 0,  -- copper earned from loot and quests (100 copper = 1 silver)
     quests    = {},   -- list of {id = 123, name = "Quest title"}
     items     = {},   -- list of {id = 456, name = "Item name"}
     dungeons  = {},   -- list of dungeon names
@@ -214,6 +221,7 @@ local function onLogin(isReload)
 
   lastLevel = nil
   updateXP()             -- remember starting XP
+  lastMoney = GetMoney()
   checkDungeon(isReload)
   Tracker.Snapshot()
 end
@@ -299,6 +307,27 @@ handlers.PLAYER_DEAD = function()
     C_Timer.After(1, function() entry.killer = killerFromRecap() end)
   end
   Tracker.Snapshot()
+end
+
+handlers.PLAYER_MONEY = function()
+  local now = readable(GetMoney())
+  if not now then return end
+  local s = current()
+  if s and lastMoney and now > lastMoney and shopping == 0 then
+    s.moneyGained = (s.moneyGained or 0) + (now - lastMoney)
+  end
+  lastMoney = now
+end
+
+-- Each window that opens adds 1 to "shopping", and closing takes 1 away.
+-- math.max keeps it from going below 0 if a close event fires twice.
+for _, pair in ipairs({
+  { "MERCHANT_SHOW", "MERCHANT_CLOSED" }, { "MAIL_SHOW", "MAIL_CLOSED" },
+  { "TRADE_SHOW", "TRADE_CLOSED" },
+  { "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED" },
+}) do
+  handlers[pair[1]] = function() shopping = shopping + 1 end
+  handlers[pair[2]] = function() shopping = math.max(0, shopping - 1) end
 end
 
 -- QUEST_COMPLETE fires when the quest's reward window opens. We note the

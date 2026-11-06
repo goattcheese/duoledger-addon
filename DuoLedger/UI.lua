@@ -66,7 +66,9 @@ local function buildSummary()
     -- # gives the length of a list.
     string.format("Quests %d   Items %d   Dungeons %d",
       #s.quests, #s.items, #s.dungeons),
-    string.format("Deaths %d   Items mailed %d", s.deaths, #s.mail),
+    string.format("Deaths %d   Items mailed %d   Money earned %s", s.deaths,
+      #s.mail, GetCoinTextureString and GetCoinTextureString(s.moneyGained or 0)
+        or tostring(s.moneyGained or 0)),
     lastDeath(s),
     "",
     string.format("|cff999999Finished sessions stored: %d|r",

@@ -44,6 +44,7 @@ A **session** runs from login to logout. A `/reload` doesn't split it. Switching
 | `xpGained` | Every XP change added up, counting the rest of the bar when you ding |
 | `deaths` | How many times you died |
 | `deathLog` | Each death as `{at, zone, killer}`. The killer comes from the game's Death Recap, like `Scarlet Zealot (Holy Strike)` or `Falling`. If the recap has nothing readable, the death is still logged without a killer |
+| `moneyGained` | Copper earned from loot and quests (100 copper is 1 silver). Money that comes in while a vendor, mailbox, trade or auction window is open isn't counted |
 | `quests` | Each quest turned in, as `{id, name}`. The Ledger ticks off dungeon quests by name |
 | `items` | Each green-or-better item you looted, as `{id, name}`. The Ledger marks wishlist items obtained by id |
 | `dungeons` | The name of each 5-player dungeon you zoned into. Running back in as a ghost or reloading inside doesn't count |
@@ -91,4 +92,4 @@ Two things still to check in the real game:
 - **Hearth names.** The Ledger only accepts hearths from its own list. The game may call Stormwind's inn "Stormwind City", which `Export.lua` already translates. If the Ledger doesn't pick up your hearth, tell me what the Summary shows.
 - **Dungeon names.** These come from the game and should match the Ledger's list, but a wing like Scarlet Monastery might be named differently.
 
-The Ledger also accepts a few extras this version doesn't send yet: `moneyGained` per session, and a top-level `addons` list for Launch prep. Kill counts would need the combat log, which the new addon rules block.
+The Ledger also accepts a few extras this version doesn't send yet: a top-level `addons` list for Launch prep. Kill counts would need the combat log, which the new addon rules block.
